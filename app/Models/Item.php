@@ -20,6 +20,8 @@ class Item extends Model
         'indoor_sn',
         'outdoor_model',
         'outdoor_sn',
+        'price',
+        'total_amount',
     ];
 
     protected $casts = [

@@ -39,6 +39,17 @@ class ItemResource extends Resource
                     ->unique()
                     ->maxLength(255)
                     ->columnSpan(2),
+                    Forms\Components\TextInput::make('price')
+                    ->label('Price')
+                    ->required()
+                    ->numeric()
+                    ->reactive()
+                    ->debounce(500)
+                    ->afterStateUpdated(fn ($state, callable $set, callable $get) => 
+                        $set('total_amount', floatval($state) * count($get('indoor_sn') ?? []))
+                    )
+                    ->columnSpan(2)
+                    ->columnStart(11),
                 ]),
 
             // Two-column layout for the rest
@@ -84,6 +95,10 @@ class ItemResource extends Resource
             // Full-width repeaters
             Forms\Components\Repeater::make('indoor_sn')
                 ->label('Indoor Serial Number')
+                ->reactive()
+                ->afterStateUpdated(fn ($state, callable $set, callable $get) => 
+                    $set('total_amount', floatval($get('price')) * count($state ?? []))
+                )
                 ->simple(
                     Forms\Components\TextInput::make('indoor_sn')
                         ->required()
@@ -97,6 +112,16 @@ class ItemResource extends Resource
                         ->required()
                         ->maxLength(255),
                 ),
+
+            Forms\Components\Grid::make(12)
+                ->schema([
+                    Forms\Components\TextInput::make('total_amount')
+                    ->label('Total')
+                    ->numeric()
+                    ->unique()
+                    ->columnSpan(2)
+                    ->columnStart(11),
+                ]),
         ]);
     }
 
@@ -105,7 +130,7 @@ class ItemResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('customer.name')
-                    ->label('Status')
+                    ->label('Customer Name')
                     ->badge()
                     ->getStateUsing(fn($record) => $record->customer?->name ?? 'Available')
                     ->color(fn (string $state): string => match ($state) {
@@ -131,6 +156,10 @@ class ItemResource extends Resource
                     ->searchable(),
                 TextColumn::make('indoor_sn')
                 ->label('Indoor SN')
+                ->badge()
+                ->color(fn (string $state): string => match ($state) {
+                    default => 'warning',
+                })
                 ->formatStateUsing(fn ($state) => is_array($state) ? implode(', ', $state) : $state)
                 ->wrap()
                 ->searchable(),
@@ -140,6 +169,14 @@ class ItemResource extends Resource
                 ->formatStateUsing(fn ($state) => is_array($state) ? implode(', ', $state) : $state)
                 ->wrap()
                 ->searchable(),
+                TextColumn::make('price')
+                    ->label('Price')
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('total_amount')
+                    ->label('Total')
+                    ->numeric()
+                    ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

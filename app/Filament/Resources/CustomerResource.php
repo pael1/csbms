@@ -10,7 +10,10 @@ use Filament\Forms\Form;
 use Filament\Tables\Table;
 use Filament\Resources\Resource;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\DatePicker;
 use Illuminate\Database\Eloquent\Builder;
 use App\Filament\Resources\CustomerResource\Pages;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -25,26 +28,42 @@ class CustomerResource extends Resource
     public static function form(Form $form): Form
     {
         return $form
-            ->schema([
-                Forms\Components\TextInput::make('name')
-                    ->required()
-                    ->maxLength(255),
-                Select::make('item_num')
-                    ->searchable()
-                    ->multiple()
-                    ->preload()
-                    ->options(fn() => Item::pluck('item_number', 'item_number')->toArray()),
-                Forms\Components\TextInput::make('invoice_no')
-                    ->maxLength(255),
-                Forms\Components\DatePicker::make('invoice_date'),
-                Forms\Components\TextInput::make('delivery_no')
-                    ->maxLength(255),
-                Forms\Components\DatePicker::make('delivery_date'),
-                Forms\Components\TextInput::make('amount')
-                    ->numeric(),
-                Forms\Components\Textarea::make('remarks')
-                    ->columnSpanFull(),
-            ]);
+    ->schema([
+        TextInput::make('name')
+            ->required()
+            ->maxLength(255),
+
+        Select::make('item_num')
+            ->label('Item Numbers')
+            ->searchable()
+            ->multiple()
+            ->preload()
+            ->reactive() // ✅ Make reactive
+            ->options(fn () => Item::pluck('item_number', 'item_number')->toArray())
+            ->afterStateUpdated(function ($state, callable $set) {
+                // $state = array of selected item_numbers
+                $total = Item::whereIn('item_number', $state)->sum('total_amount');
+                $set('amount', $total);
+            }),
+
+        TextInput::make('invoice_no')
+            ->maxLength(255),
+
+        DatePicker::make('invoice_date'),
+
+        TextInput::make('delivery_no')
+            ->maxLength(255),
+
+        DatePicker::make('delivery_date'),
+
+        TextInput::make('amount')
+            ->label('Total Amount')
+            ->numeric()
+            ->disabled(), // prevent user from manually editing
+       
+        Textarea::make('remarks')
+            ->columnSpanFull(),
+    ]);
     }
 
     public static function table(Table $table): Table
