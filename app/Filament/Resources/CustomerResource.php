@@ -8,6 +8,7 @@ use Filament\Tables;
 use App\Models\Customer;
 use Filament\Forms\Form;
 use Filament\Tables\Table;
+use Filament\Support\RawJs;
 use Filament\Resources\Resource;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -23,43 +24,57 @@ class CustomerResource extends Resource
 {
     protected static ?string $model = Customer::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationLabel = 'Sales Invoice';
+    protected static ?string $navigationIcon = 'heroicon-o-user';
 
     public static function form(Form $form): Form
     {
         return $form
     ->schema([
         TextInput::make('name')
+            ->label('Customer Name')
             ->required()
             ->maxLength(255),
 
         Select::make('item_num')
-            ->label('Item Numbers')
+            ->label('DR Number')
+            ->required()
             ->searchable()
             ->multiple()
             ->preload()
             ->reactive() // ✅ Make reactive
-            ->options(fn () => Item::pluck('item_number', 'item_number')->toArray())
+            ->options(fn () => Item::whereNull('customer_id')
+                                    ->pluck('item_number', 'item_number')
+                                    ->toArray())
             ->afterStateUpdated(function ($state, callable $set) {
-                // $state = array of selected item_numbers
                 $total = Item::whereIn('item_number', $state)->sum('total_amount');
-                $set('amount', $total);
+
+                $formatted = number_format($total, 0, '.', ',');
+                $set('amount', $formatted);
             }),
 
         TextInput::make('invoice_no')
+            ->required()
             ->maxLength(255),
 
-        DatePicker::make('invoice_date'),
+        DatePicker::make('invoice_date')
+            ->required(),
 
         TextInput::make('delivery_no')
+            ->required()
             ->maxLength(255),
 
-        DatePicker::make('delivery_date'),
+        DatePicker::make('delivery_date')
+            ->required(),
 
         TextInput::make('amount')
             ->label('Total Amount')
             ->numeric()
-            ->disabled(), // prevent user from manually editing
+            ->prefix('₱')
+            ->mask(RawJs::make('$money($input)')) // JS-side formatting
+            ->stripCharacters(',') // helps when saving to DB
+            ->numeric()
+            ->readOnly(),
        
         Textarea::make('remarks')
             ->columnSpanFull(),
@@ -71,9 +86,10 @@ class CustomerResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
+                    ->label('Customer Name')
                     ->searchable(),
                 TextColumn::make('item_num')
-                    ->label('Item Number')
+                    ->label('DR Number')
                     ->formatStateUsing(fn ($state) => is_array($state) ? implode(', ', $state) : $state)
                     ->wrap()
                     ->searchable(),
@@ -128,5 +144,14 @@ class CustomerResource extends Resource
             'view' => Pages\ViewCustomer::route('/{record}'),
             'edit' => Pages\EditCustomer::route('/{record}/edit'),
         ];
+    }
+
+    public static function getPluralLabel(): string
+    {
+        return 'Sales Invoices'; // Plural form
+    }
+    public static function getModelLabel(): string
+    {
+        return 'Sales Invoice'; // Singular form
     }
 }

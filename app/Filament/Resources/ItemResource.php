@@ -10,6 +10,7 @@ use App\Models\Brand;
 use Filament\Forms\Form;
 use App\Models\HoresPower;
 use Filament\Tables\Table;
+use Filament\Support\RawJs;
 use App\Models\MountingType;
 use Filament\Resources\Resource;
 use Filament\Forms\Components\Select;
@@ -25,7 +26,8 @@ class ItemResource extends Resource
 {
     protected static ?string $model = Item::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationLabel = 'Delivery Receipt';
+    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
 
     public static function form(Form $form): Form
     {
@@ -34,22 +36,26 @@ class ItemResource extends Resource
             Forms\Components\Grid::make(12)
                 ->schema([
                     Forms\Components\TextInput::make('item_number')
-                    ->label('Item Number')
+                    ->label('DR Number')
                     ->required()
                     ->unique()
                     ->maxLength(255)
                     ->columnSpan(2),
-                    Forms\Components\TextInput::make('price')
-                    ->label('Price')
-                    ->required()
-                    ->numeric()
-                    ->reactive()
-                    ->debounce(500)
-                    ->afterStateUpdated(fn ($state, callable $set, callable $get) => 
-                        $set('total_amount', floatval($state) * count($get('indoor_sn') ?? []))
-                    )
-                    ->columnSpan(2)
-                    ->columnStart(11),
+                    TextInput::make('price')
+                        ->label('Price')
+                        ->required()
+                        // ->reactive()
+                        // ->debounce(500)
+                        // ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                        //     $cleanPrice = floatval(str_replace(',', '', $state));
+                        //     $set('total_amount', $cleanPrice * count($get('indoor_sn') ?? []));
+                        // })
+                        ->prefix('₱')
+                        ->mask(RawJs::make('$money($input)')) // JS-side formatting
+                        ->stripCharacters(',') // helps when saving to DB
+                        ->numeric()
+                        ->columnSpan(3)
+                        ->columnStart(10),
                 ]),
 
             // Two-column layout for the rest
@@ -96,12 +102,21 @@ class ItemResource extends Resource
             Forms\Components\Repeater::make('indoor_sn')
                 ->label('Indoor Serial Number')
                 ->reactive()
-                ->afterStateUpdated(fn ($state, callable $set, callable $get) => 
-                    $set('total_amount', floatval($get('price')) * count($state ?? []))
-                )
+                ->debounce(500)
+                ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                    $rawPrice = $get('price') ?? 0;
+                    $cleanPrice = floatval(str_replace(',', '', $rawPrice));
+                    $total = $cleanPrice * count($state ?? []);
+
+                    // Format the total amount to 2 decimal places with comma
+                    $formatted = number_format($total, 0, '.', ',');
+
+                    $set('total_amount', $formatted);
+                })
                 ->simple(
                     Forms\Components\TextInput::make('indoor_sn')
                         ->required()
+                        ->distinct() // Prevents duplicates in the array automatically
                         ->maxLength(255),
                 ),
 
@@ -110,17 +125,21 @@ class ItemResource extends Resource
                 ->simple(
                     Forms\Components\TextInput::make('outdoor_sn')
                         ->required()
+                        ->distinct()
                         ->maxLength(255),
                 ),
 
             Forms\Components\Grid::make(12)
                 ->schema([
                     Forms\Components\TextInput::make('total_amount')
-                    ->label('Total')
+                    ->label('Total Amount')
+                    ->prefix('₱')
+                    ->mask(RawJs::make('$money($input)')) // JS-side formatting
+                    ->stripCharacters(',') // helps when saving to DB
                     ->numeric()
-                    ->unique()
-                    ->columnSpan(2)
-                    ->columnStart(11),
+                    ->readOnly()
+                    ->columnSpan(3)
+                    ->columnStart(10),
                 ]),
         ]);
     }
@@ -219,11 +238,10 @@ class ItemResource extends Resource
 
     public static function getPluralLabel(): string
     {
-        return 'Particulars';
+        return 'Delivery Receipts'; // Plural form
     }
-
-    public static function getNavigationLabel(): string
+    public static function getModelLabel(): string
     {
-        return 'Particulars';
+        return 'Delivery Receipt'; // Singular form
     }
 }
